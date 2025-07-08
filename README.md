@@ -39,6 +39,18 @@ This capstone project investigates what factors most influence country-level hap
 > **Note**: This was a group project. Each member contributed across different sections. I worked on multiple areas including regression analysis, classification modeling, visualization, interpretation, and collaborative writing.
 
 ---
+## Code Snippets
+
+The following R Markdown files highlight key steps and models used in our analysis:
+
+- **PCA_analysis.Rmd**: Performs full principal component analysis, including data scaling, variance capture, and component interpretation.
+- **PCA_results.Rmd**: Applies PCA-transformed variables in predictive modeling and evaluates model fit with summary statistics.
+- **classification_model.Rmd**: Implements classification algorithms (logistic regression, LDA, QDA, KNN) to distinguish high vs. low happiness levels.
+- **decision_tree_model.Rmd**: Builds and visualizes decision tree models to identify top drivers of happiness across countries.
+- **model_evaluation.Rmd**: Compares and summarizes the performance of all regression and classification models using metrics like R², RMSE, accuracy, etc.
+- **cleandf.csv**: Cleaned and preprocessed dataset used across all analysis scripts — includes economic, health, and social indicators per country.
+
+---
 
 ## Key Findings
 
