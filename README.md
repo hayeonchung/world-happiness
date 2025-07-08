@@ -31,8 +31,7 @@ This capstone project investigates what factors most influence country-level hap
 
 | File | Description |
 |------|-------------|
-| `Capstone Project - Technical Report.pdf` | Final capstone report |
-| `visuals/` | Project visualizations (e.g., PCA plots, feature importance) |
+| `Capstone Project - Technical Report.pdf` | Final capstone report that includes important visuals |
 | `snippets/` | R code snippets from each method |
 | `README.md` | Overview of the project |
 
