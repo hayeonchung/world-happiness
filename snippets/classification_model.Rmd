@@ -1,0 +1,189 @@
+---
+title: "classification"
+author: "Anh Ly"
+date: "2025-04-14"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r library load}
+library(tidyverse)
+library(readxl)
+library(tidymodels)
+library(modelr)
+library(randomForest)
+library(yardstick)
+
+```
+
+#Random forest using data 
+```{r random forest}
+df <- read.csv("/Users/anhly/Desktop/STAT 4996/Visualization/cleandf.csv")
+median_life_ladder <- median(df$Life.Ladder, na.rm = TRUE)
+
+## Modify data:
+## 1. Remove model variable
+## 2. Remove all rows with any NAs: they cannot be used
+## 3. Make SmartWay a factor variable
+df <- df %>%
+  select(-Country) %>%
+  drop_na() %>%
+  mutate(Life.Ladder = as_factor(if_else(Life.Ladder > median_life_ladder, "High", "Low")))
+
+#median is 6.144
+
+#check variable type 
+str(df)
+dim(df)
+
+## Divide data: training/validation/testing
+df.3div <- df %>%
+  initial_split(prop = 0.6)
+
+df.3div2 <- df.3div %>%
+  testing() %>%
+  initial_split(prop = 0.5)
+
+df.train3 <- training(df.3div)
+df.validate3 <- training(df.3div2)
+df.test3 <- testing(df.3div2)
+
+
+RF.mod1 <- randomForest(Life.Ladder ~ .,
+                        data = df.train3,
+                        mtry = 8, 
+                        importance = TRUE)
+
+
+importance(RF.mod1)
+
+
+RF.mod2 <- randomForest(
+  Life.Ladder ~ 
+    `High.technology.exports..current.US..` +
+    `Individuals.using.the.Internet....of.population.` +
+    `GDP.per.capita..current.US..` +
+    `People.using.at.least.basic.drinking.water.services....of.population.` +
+    Log.GDP.per.capita +
+    `Life.expectancy.at.birth..total..years.` +
+    `People.using.at.least.basic.sanitation.services....of.population.` +
+    `Unemployment..total....of.total.labor.force...national.estimate.` +
+    `Total.greenhouse.gas.emissions.excluding.LULUCF.per.capita..t.CO2e.capita.`,
+  data = df.train3,
+  mtry = 8,
+  importance = TRUE
+)
+
+importance(RF.mod2)
+
+RF.add <- df.validate3 %>%
+  gather_predictions(RF.mod2, type = "class") %>%
+  rename(pred_LifeLadder = pred)  %>%
+  mutate(pred_LifeLadder = as.factor( pred_LifeLadder ))
+
+
+## Confusion matrix
+## Use validation data
+RF.add %>%
+  filter(model == "RF.mod2") %>%
+  conf_mat(truth = Life.Ladder, estimate = pred_LifeLadder)
+
+
+## Accuracy, precision, and recall
+## Use validation data
+all_metrics <- metric_set(accuracy, yardstick::precision, yardstick::recall)
+
+RF.add %>%
+  group_by(model) %>%
+  all_metrics(truth = Life.Ladder, estimate = pred_LifeLadder)
+
+
+```
+
+#Random forest with PC
+```{r random forest PC}
+pc <- read.csv("/Users/anhly/Desktop/STAT 4996/Analysis/pc_scores.csv")
+
+# Combine PC scores with the target variable
+df_rf <- data.frame(Life.Ladder = df$Life.Ladder, pc_scores)
+df_rf <- df_rf[1:556, ]
+
+## Modify data:
+## 1. Remove model variable
+## 2. Remove all rows with any NAs: they cannot be used
+## 3. Make SmartWay a factor variable
+df_rf <- df_rf %>%
+  drop_na() %>%
+  mutate(Life.Ladder = as_factor(if_else(Life.Ladder > median_life_ladder, "High", "Low")))
+
+
+## Divide data: training/validation/testing
+veh.3div <- df_rf %>%
+  initial_split(prop = 0.6)
+
+veh.3div2 <- veh.3div %>%
+  testing() %>%
+  initial_split(prop = 0.5)
+
+veh.train3 <- training(veh.3div)
+veh.validate3 <- training(veh.3div2)
+veh.test3 <- testing(veh.3div2)
+
+
+## Build random forest
+## Without air pollution score
+## Two variables are eligible for a split at each node
+RF.mod1 <- randomForest(Life.Ladder ~ . ,
+                        data = veh.train3,
+                        mtry = 2, importance = TRUE)
+
+
+## Random forest information
+## No. of variables shows the number of variables available for each split
+## OOB estimate of error rate is an estimate of misclassification
+## Misclassification error shown for each level with confusion matrix
+RF.mod1
+
+
+## Importance of predictor variables
+## The values show the percent decrease in the following measures when each variable is not 
+## available for a split 
+##   a. prediction accuracy for each level of the response variable
+##   b. overall prediction accuracy
+##   c. node purity
+RF.mod1 %>% 
+  importance()
+
+
+## Add predicted values to VALIDATION data
+## Change default column names
+## Potential issue: 
+##   When the data is split, it is possible that a category that is present in one set is not 
+##   present in other sets. In this case, prediction will not work.
+RF.add <- veh.validate3 %>%
+  gather_predictions(RF.mod1, type = "class") %>%
+  rename(pred_SmartWay = pred)  %>%
+  mutate(pred_SmartWay = as.factor( pred_SmartWay ))
+
+
+## Confusion matrix
+## Use validation data
+RF.add %>%
+  filter(model == "RF.mod1") %>%
+  conf_mat(truth = SmartWay, estimate = pred_SmartWay)
+
+
+## Accuracy, precision, and recall
+## Use validation data
+all_metrics <- metric_set(accuracy, precision, recall)
+
+RF.add %>%
+  group_by(model) %>%
+  all_metrics(truth = SmartWay, estimate = pred_SmartWay)
+
+
+```
+

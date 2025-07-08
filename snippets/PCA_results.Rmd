@@ -1,0 +1,236 @@
+---
+title: "PCA"
+author: "Anh Ly"
+date: "2025-02-26"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r library}
+library(ISLR2)
+library(leaps)
+library(pls)
+library(dplyr)
+library(pls)
+```
+
+
+```{r data - handling NAs}
+df <- read.csv("/Users/anhly/Desktop/STAT 4996/Visualization/cleandf.csv")
+
+#check variable type 
+str(df)
+dim(df)
+sum(is.na(df$Life.Ladder))
+
+#removing NAs completely 
+#df <- na.omit(df)
+#dim(df) #102 observations 
+#sum(is.na(df))
+
+#replacing NAs with median or mean 
+#### can choose other alternative 
+df_numeric <- df %>% 
+  mutate(across(where(is.numeric), ~ifelse(is.na(.), median(., na.rm = TRUE), .)))
+```
+
+# Dimension Reduction Methods - pg 252 
+
+## Principal Component Analysis
+- PCA transformed original 44 variables into new, uncorrelated "principal components"
+- These PCs captured the most variance in the data, allowing us to use fewer predictors.
+- Used 12 PCs in regression which had an R^2 = 80.17% meaning it explained 80% of the variance in the life ladder.
+
+- PCs are abstract -  don’t know exactly which factors (GDP, corruption, etc.) are driving happiness
+- ll variables are weighted equally – PCA is purely statistical and doesn’t group variables based on meaning (e.g., economic vs. social factors)
+
+```{r test/training}
+#exclude Country and Year
+df_pcr <- df_numeric %>% select(-Country, -Year)
+
+set.seed(1)
+train <- sample(c(TRUE, FALSE), nrow(df_pcr),
+    replace = TRUE)
+test <- (!train)
+
+set.seed(1)
+train_index <- sample(1:nrow(df_pcr), size = 0.8 * nrow(df_pcr))  # 80% train
+train <- rep(FALSE, nrow(df_pcr))
+train[train_index] <- TRUE  # Set TRUE for training rows
+test <- !train  # Opposite for test
+
+```
+Look into PC1 ~ 12 is too high and 80 is not get that great 
+Check if PCs can fall into the nice buckets 
+
+we are using 5 PCs 
+if we look into PC1 then see the coefficents in front 
+- has to be quantitative - numeric 
+- need to check if standardized before because larger variables will have bigger weight 
+- look into PC5 level ~ it was around 75% 
+
+For next meeting 
+-visualization - work with 
+
+composite score 
+1. simple heat map 
+
+PCR takes the y variable into account
+PCA does not take y variable into account - trying to group - exclude the Y and apply PCA to x variables 
+
+Coherent document for someoen who does not understand 
+
+
+
+```{r PCA}
+
+set.seed(2)
+pcr.fit <- pcr(Life.Ladder ~ ., data = df_pcr, scale = TRUE,
+    validation = "CV")
+
+summary(pcr.fit)
+
+validationplot(pcr.fit, val.type = "MSEP")
+
+#PCR training 
+set.seed(1)
+pcr.fit <- pcr(Life.Ladder ~ ., data = df_pcr, subset = which(train),
+    scale = TRUE, validation = "CV")
+validationplot(pcr.fit, val.type = "MSEP")
+
+pcr.pred <- predict(pcr.fit, df_pcr[which(test), ], ncomp = 5)
+mean((pcr.pred - df_pcr$Life.Ladder[which(test)])^2) # Compute test MSE
+
+#Example
+#pcr.fit <- pcr(y ~ x, scale = TRUE, ncomp = 5)
+#summary(pcr.fit)
+
+pcr.fit <- pcr(Life.Ladder ~ ., data = df_pcr, scale = TRUE, ncomp = 5)
+summary(pcr.fit)
+
+#12 gives a 80% but 5 captures 75% 
+pcr.fit <- pcr(Life.Ladder ~ ., data = df_pcr, scale = TRUE, ncomp = 12)
+summary(pcr.fit)
+
+#------------Keep first 5 PCs
+df_pca <- as.data.frame(pcr.fit$scores[, 1:5])  
+df_pca$Life.Ladder <- df_pcr$Life.Ladder  
+
+lm_model <- lm(Life.Ladder ~ ., data = df_pca)
+summary(lm_model)
+
+#-----------Keep first 6
+df_pca1 <- as.data.frame(pcr.fit$scores[, 1:6])  
+df_pca1$Life.Ladder <- df_pcr$Life.Ladder  
+
+#captures 80% more of variance
+lm_model1 <- lm(Life.Ladder ~ ., data = df_pca1)
+summary(lm_model1)
+
+#Extract top 6 PC 
+loadings5 <- pcr.fit$loadings[, 1:6]  
+print(loadings5)
+
+#Extract top 12 PC 
+loadings12 <- pcr.fit$loadings[, 1:12] 
+print(loadings12)
+
+#look at the componenet weights from each comp X ~ see which has the highest weight then 
+#componeent 1 should be the best and then the following descend for each comp X, X1, etc 
+#look at the weight 
+#look at the y hat 
+#do PCA - he would be surprised if PCA is better - PCR uses the y - value 
+#pca is a dimension reduction method 
+#validation method comparing composiite 
+#PCR - loopoing - look at MSE for each comp X 
+#try one component first 
+
+```
+
+```{r PCR rmse calculation}
+
+#PCR on training data
+pcr.fit <- pcr(Life.Ladder ~ ., data = df_pcr, subset = train, scale = TRUE, validation = "CV")
+
+rmse_values <- numeric(12)
+
+#looping over 1-12 components
+for (i in 1:12) {
+  pred <- predict(pcr.fit, newdata = df_pcr[test, ], ncomp = i)
+  rmse_values[i] <- sqrt(mean((pred - df_pcr$Life.Ladder[test])^2))
+}
+
+#rmses for each comp.
+print(rmse_values)
+
+#Plot RMSE vs. # Components
+plot(1:12, rmse_values, type = "b", pch = 19,
+     xlab = "Number of Principal Components", ylab = "Test RMSE",
+     main = "PCR Test RMSE vs. Number of Components")
+
+```
+
+## Partial least Squares 
+```{r}
+
+```
+
+## Feauture Selection Method 
+```{r stepwise}
+#cut out WHR data 
+df_noWHR <- df_pcr %>%
+  select(-Log.GDP.per.capita, -Social.support, 
+         -Healthy.life.expectancy.at.birth, -Freedom.to.make.life.choices, 
+         -Generosity, -Perceptions.of.corruption, -Positive.affect, -Negative.affect)
+
+
+regfit.full <- regsubsets(Life.Ladder ~ ., df_noWHR)
+summary(regfit.full)
+
+regfit.fwd <- regsubsets(Life.Ladder ~ ., data = df_noWHR,
+    nvmax = 10, method = "forward")
+summary(regfit.fwd)
+
+regfit.bwd <- regsubsets(Life.Ladder ~ ., data = df_noWHR,
+    nvmax = 10, method = "backward")
+summary(regfit.bwd)
+
+coef(regfit.full, 7)
+coef(regfit.fwd, 7)
+coef(regfit.bwd, 7)
+
+
+```
+
+
+## Compare PCA-Based Model to Composite Scores
+Next Step is to Compare PCA-Based Model to Composite Scores
+Run a regression on those scores once created. 
+
+```{r}
+
+#created this based off of feature selection above 
+#-------------------Needs to be refined and based off of our categories decided in our call Tues. 
+
+df_composite <- df_pcr %>%
+  mutate(
+    Economic_Score = rowMeans(select(., GDP.per.capita..current.US.., Inflation..consumer.prices..annual...), na.rm = TRUE),
+    
+    Infrastructure_Score = rowMeans(select(., People.using.at.least.basic.sanitation.services....of.population.), na.rm = TRUE),
+    
+    Governance_Score = rowMeans(select(., Proportion.of.seats.held.by.women.in.national.parliaments...., Voice.and.Accountability..Percentile.Rank, Women.Business.and.the.Law.Index.Score..scale.1.100.), na.rm = TRUE),
+    
+    Environmental_Score = Total.greenhouse.gas.emissions.excluding.LULUCF.per.capita..t.CO2e.capita.
+  )
+
+lm_composite <- lm(Life.Ladder ~ Economic_Score + Infrastructure_Score + Governance_Score + Environmental_Score, data = df_composite)
+summary(lm_composite)
+
+
+
+```
+
+

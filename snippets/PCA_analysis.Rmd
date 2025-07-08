@@ -1,0 +1,168 @@
+---
+title: "Capstone PCA"
+output: pdf_document
+date: "2025-03-22"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+library(readxl)
+library(ggplot2)
+library(factoextra) 
+library(dplyr)
+library(caret)
+library(psych)
+library(pls)
+```
+
+## Load and Preprocess Data
+```{r}
+df <- read_excel("/Users/hayeonchung/Downloads/capstonedata.xlsx")
+
+# Removing non-feature columns 
+df <- df %>% select(-`...1`, -Country, -Year)
+
+# Replacing ".." with NA
+df[df == ".."] <- NA
+
+# Converting all columns to numeric 
+df_numeric <- df %>%
+  mutate(across(everything(), ~as.numeric(.)))
+
+# Replacing NAs in numeric columns with median values
+df_filled <- df_numeric %>%
+  mutate(across(everything(), ~ifelse(is.na(.), median(., na.rm = TRUE), .)))
+
+# Confirming there are no NAs left
+sum(is.na(df_filled))  # output should be 0
+```
+ 
+## Define Target Variable and Split Data
+
+```{r}
+# Use "Life.Ladder" as the target variable
+df_filled$target_variable <- df_filled$Life.Ladder
+df_filled <- df_filled %>% select(-Life.Ladder)  # Removing original column to avoid duplication
+
+# Train-test split
+set.seed(123)
+splitIndex <- createDataPartition(df_filled$target_variable, p = 0.7, list = FALSE)
+train_data <- df_filled[splitIndex, ]
+test_data <- df_filled[-splitIndex, ]
+```
+
+## PCA on Training Data Only
+```{r}
+# Remove target variable before PCA
+train_x <- train_data %>% select(-target_variable)
+test_x <- test_data %>% select(-target_variable)
+
+# Standardize and perform PCA
+pca_result <- prcomp(train_x, center = TRUE, scale. = TRUE)
+summary(pca_result)
+
+# Scree plot
+fviz_eig(pca_result)
+
+# Transform train and test sets
+train_pcs <- as.data.frame(predict(pca_result, newdata = train_x))
+test_pcs <- as.data.frame(predict(pca_result, newdata = test_x))
+
+# Add target variable back
+train_pcs$target_variable <- train_data$target_variable
+test_pcs$target_variable <- test_data$target_variable
+```
+The scree plot provides a clear visual representation of how much variance each 
+principal component explains. As shown, the first principal component (PC1) stands 
+out by explaining approximately 26.6% of the total variance which is more than double 
+that of any other component. The second component (PC2) accounts for about 10.4%, 
+and together, PC1 and PC2 explain just over 37% of the variance in the dataset. 
+The third (PC3) and fourth (PC4) components contribute around 7.5% and 4.8%, 
+respectively, with the explained variance continuing to decline gradually thereafter.
+
+The plot shows a sharp “elbow” after the second component, indicating that PC1 
+and PC2 capture the most meaningful structure in the data. This elbow suggests 
+that a two-component solution may be effective for visualizing or summarizing 
+the data in reduced dimensions.
+
+## Principal Component Interpretation
+
+```{r}
+# Variable loadings
+pca_loadings <- pca_result$rotation
+sort(pca_loadings[, "PC1"], decreasing = TRUE)[1:10]
+sort(pca_loadings[, "PC2"], decreasing = TRUE)[1:10]   
+```
+The first principal component appears to capture a comprehensive measure
+of development and well-being, strongly driven by indicators across multiple 
+domains. Within the health category, life expectancy at birth and healthy life 
+expectancy are among the top contributors, highlighting the central role of 
+population health outcomes. From the infrastructure development category, access 
+to internet, basic sanitation, electricity, and safe drinking water also load 
+heavily on PC1, indicating the importance of basic service access. Additionally,
+GDP per capita and log GDP per capita from the economic indicators category, 
+along with the subjective well-being measure Life Ladder, and social support
+from the social indicators category, further support the interpretation of PC1 
+as a representative for overall socioeconomic development and quality of life. Countries with higher PC1 scores tend to enjoy better public health, infrastructure, 
+economic conditions, and general life satisfaction.
+
+In contrast, the second principal component (PC2) emphasizes aspects related 
+more to governance, representation, and institutional inclusion. Its top 
+contributors include Voice and Accountability (Percentile Rank) and Proportion
+of seats held by women in national parliaments, both of which fall under the 
+social indicators category and reflect levels of civic engagement and gender 
+equity in political participation. While several indicators from the 
+infrastructure and health categories—such as access to water, internet, and 
+healthy life expectancy—also contribute moderately to PC2, their influence is 
+less pronounced than in PC1. The presence of the unemployment rate from the 
+economic indicators category further suggests that PC2 may reflect institutional
+structures that impact equity and opportunity.
+
+## Linear Regression Using Principal Components 
+
+```{r}
+# Use the first 10 principal components to predict target_variable
+pcr_model <- lm(target_variable ~ ., data = train_pcs %>% select(PC1:PC10, target_variable))
+summary(pcr_model)
+```
+The summary output reveals that the PCR model using the first 10 principal components as predictors performs quite well in modeling the Life.Ladder outcome variable. The Multiple R-squared is 0.7895, and the Adjusted R-squared is 0.784, which indicates that nearly 79% of the variance in Life.Ladder is explained by the selected principal components. This suggests a strong fit and demonstrates that the reduced dimensional representation of the original dataset captures the key patterns related to well-being and life satisfaction.
+
+Looking at the coefficients, we see that PC1 has the most substantial positive impact on the target variable, with a large coefficient estimate of 0.2325 and a highly significant p-value (< 2e-16). This suggests it captures critical information related to socioeconomic well-being. Interestingly, PC3 has a large negative coefficient (-0.2458), also highly significant, indicating that the variation captured by PC3 is inversely related to Life.Ladder. Other components like PC2, PC4, PC6, PC7, PC8, PC9, and PC10 are also statistically significant (p < 0.01), implying that each component adds meaningful explanatory power to the model. The residual standard error of 0.5102 suggests a reasonably tight fit of predicted values around the actual data.
+
+## Model Evaluation on Test Set
+
+```{r}
+# Predict on test data
+predictions <- predict(pcr_model, newdata = test_pcs)
+
+# Calculate RMSE and R-squared
+rmse <- sqrt(mean((predictions - test_pcs$target_variable)^2))
+rsq <- 1 - sum((predictions - test_pcs$target_variable)^2) / sum((mean(train_pcs$target_variable) - test_pcs$target_variable)^2)
+
+cat("Test RMSE:", rmse, "\n")
+cat("Test R-squared:", rsq)
+```
+This section provides insight into how well the PCR model generalizes to unseen data. 
+The RMSE quantifies the average magnitude of prediction errors. The value of 0.511 
+means that, on average, the predictions made by our PCR model differ from the actual
+Life.Ladder scores in the test set by about 0.51 units on a scale that ranges from
+0 to 10. Since life satisfaction scores are often reported with one decimal place, this RMSE value suggests the model's predictions are reasonably accurate. 
+
+## Plot Predictions vs Actual
+
+```{r}
+ggplot(data.frame(Actual = test_pcs$target_variable, Predicted = predictions),
+       aes(x = Actual, y = Predicted)) +
+  geom_point() +
+  geom_abline(slope = 1, intercept = 0, color = 'red', linetype = 'dashed') +
+  theme_minimal() +
+  labs(title = "Predicted vs Actual", x = "Actual", y = "Predicted")
+```
+This scatterplot offers a strong visual confirmation of the PCR model's performance. 
+Each point represents an observation in the test set, with its actual Life.Ladder score on the x-axis and the model's predicted score on the y-axis. The points are 
+clustered around the red dashed line indicating a strong alignment between predicted
+and true values. Where there is some dispersion at the lower end, the overall pattern
+suggests that the model is both accurate and consistent in its predictions. 

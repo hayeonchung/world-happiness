@@ -1,0 +1,129 @@
+---
+title: "Capstone Decision Tree"
+output: pdf_document
+date: "2025-04-12"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Decision Tree with Original Variables 
+```{r, message=FALSE, warning=FALSE}
+library(readxl)
+library(dplyr)
+library(caret)
+library(rpart)
+library(rpart.plot)
+df_raw <- read_excel("capstonedata.xlsx")
+
+# Drop unnecessary columns and ensure all predictors are numeric
+df <- df_raw %>%
+  select(-`...1`, -X, -Country, -Year) %>%
+  na.omit()
+
+# Convert all columns except Life.Ladder to numeric
+df <- df %>%
+  mutate(across(-`Life.Ladder`, as.numeric))
+
+# Create binary outcome from Life.Ladder
+median_ll <- median(df$`Life.Ladder`, na.rm = TRUE)
+df <- df %>%
+  mutate(LifeLadderBinary = ifelse(`Life.Ladder` >= median_ll, 1, 0),
+         LifeLadderBinary = as.factor(LifeLadderBinary))
+
+# Train/test split
+set.seed(123)
+train_index <- createDataPartition(df$LifeLadderBinary, p = 0.7, list = FALSE)
+train_data <- df[train_index, ]
+test_data <- df[-train_index, ]
+```
+# Decision Tree with Original Variables
+```{r}
+# Drop target variables from predictors
+predictors_orig <- train_data %>% select(-`Life.Ladder`, -LifeLadderBinary)
+response_orig <- train_data$LifeLadderBinary
+
+# Fit decision tree
+tree_orig <- rpart(LifeLadderBinary ~ ., data = cbind(predictors_orig, LifeLadderBinary = response_orig), method = "class")
+rpart.plot(tree_orig)
+
+# Predict and evaluate
+pred_orig <- predict(tree_orig, test_data, type = "class")
+conf_orig <- confusionMatrix(pred_orig, test_data$LifeLadderBinary, positive = "1")
+print(conf_orig)
+```
+This original variables based tree model prioritizes variables such as 
+Log.GDP.per.capita, Freedom.to.make.life.choices, GDP.per.capita..current.US.., Social.support, and Healthy.life.expectancy.at.birth in determining whether a 
+country falls above or below the median Life Ladder score. The first and most 
+influential split occurs at Log.GDP.per.capita < 9.8, indicating that economic
+prosperity is a key driver of life satisfaction. Subsequent splits reflect access
+to healthcare, governance (e.g., Voice.and.Accountability..Percentile.Rank), and
+tax burden, all of which align with common contributors to well-being.
+
+# Decision Tree with Principal Components
+```{r}
+# Extract predictors and convert to numeric
+df_pca_input <- df %>% select(-`Life.Ladder`, -LifeLadderBinary)
+df_pca_input <- df_pca_input %>% mutate(across(everything(), as.numeric))
+
+# Remove near-zero variance columns
+nzv <- nearZeroVar(df_pca_input)
+if (length(nzv) > 0) {
+  df_pca_input <- df_pca_input[, -nzv]
+}
+
+# Remove rows with any NA or Inf
+valid_rows <- apply(df_pca_input, 1, function(row) all(is.finite(row) & !is.na(row)))
+df_pca_input_clean <- df_pca_input[valid_rows, ]
+target_clean <- df$LifeLadderBinary[valid_rows]
+
+# Run PCA
+df_pca_scaled <- scale(df_pca_input_clean)
+pca <- prcomp(df_pca_scaled, center = TRUE, scale. = TRUE)
+
+# Keep top 10 PCs and align with clean target
+pc_df <- as.data.frame(pca$x[, 1:10])
+pc_df$LifeLadderBinary <- target_clean
+
+# Train/Test split for PCA dataset
+set.seed(123)
+train_index_pc <- createDataPartition(pc_df$LifeLadderBinary, p = 0.7, list = FALSE)
+train_pc <- pc_df[train_index_pc, ]
+test_pc <- pc_df[-train_index_pc, ]
+
+# Train decision tree
+tree_pc <- rpart(LifeLadderBinary ~ ., data = train_pc, method = "class")
+rpart.plot(tree_pc)
+
+# Predict and evaluate
+pred_pc <- predict(tree_pc, test_pc, type = "class")
+conf_pc <- confusionMatrix(pred_pc, test_pc$LifeLadderBinary, positive = "1")
+print(conf_pc)
+```
+The PCA-based decision tree is less interpretable due to its reliance on principal components, which are linear combinations of the original variables. However, 
+the first split on PC1 still captures most of the variance in the data, and the
+tree structure remains simple and effective. While individual splits can’t be 
+directly tied to specific variables, the model still performed well, suggesting 
+that the principal components retained meaningful patterns for classification.
+
+# Comparison
+```{r}
+metrics <- data.frame(
+  Model = c("Original Variables", "Principal Components"),
+  Accuracy = c(0.8347, 0.8667),
+  Precision = c(0.8727, 0.8636),
+  Recall = c(0.7869, 0.9500)
+)
+
+print(metrics)
+```
+Overall, the original-variable model offers better interpretability, showing clear relationships between social and economic indicators and life satisfaction.
+The PCA model, while less transparent, captures similar structure in a more 
+condensed form and demonstrates slightly stronger classification performance.
+
+The model trained on the original variables achieved an accuracy of 83.5%, with
+a precision of 87.3% and a recall of 78.7%. In contrast, the model trained on 
+the first ten principal components from PCA slightly outperformed in terms of 
+accuracy and recall, reaching 86.7% accuracy and an impressive 95.0% recall, 
+although it had a slightly lower precision of 86.4%. 
