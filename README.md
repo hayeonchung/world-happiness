@@ -17,13 +17,13 @@ This capstone project investigates what factors most influence country-level hap
 
 ## Methods & Techniques
 
-- 📊 **Exploratory Data Analysis (EDA)**
-- 📈 **Multiple Linear Regression** (with variable selection + regularization)
-- 🔁 **Classification Modeling** (Binary classification of high vs. low happiness using logistic regression and decision trees)
-- 🧮 **Principal Component Analysis (PCA)**
-- 💡 **Principal Component Regression (PCR)**
-- 🌐 **Composite Scoring of Domains**
-- 🔎 **Cluster Analysis of Global Patterns**
+-  **Exploratory Data Analysis (EDA)**
+-  **Multiple Linear Regression** (with variable selection + regularization)
+-  **Classification Modeling** (Binary classification of high vs. low happiness using logistic regression and decision trees)
+-  **Principal Component Analysis (PCA)**
+-  **Principal Component Regression (PCR)**
+-  **Composite Scoring of Domains**
+-  **Cluster Analysis of Global Patterns**
 
 ---
 
@@ -33,7 +33,7 @@ This capstone project investigates what factors most influence country-level hap
 |------|-------------|
 | `Capstone Project - Technical Report.pdf` | Final capstone report |
 | `visuals/` | Project visualizations (e.g., PCA plots, feature importance) |
-| `snippets/` | Optional R code snippets from each method |
+| `snippets/` | R code snippets from each method |
 | `README.md` | Overview of the project |
 
 > **Note**: This was a group project. Each member contributed across different sections. I worked on multiple areas including regression analysis, classification modeling, visualization, interpretation, and collaborative writing.
@@ -64,7 +64,7 @@ R, Regression Modeling, Classification, PCA, Composite Scoring, Data Cleaning, D
 
 ## Links
 
-- 🔗 GitHub Repository: https://github.com/hayeonchung/world-happiness-analysis
+-  GitHub Repository: https://github.com/hayeonchung/world-happiness-analysis
 
 ---
 
